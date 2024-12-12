@@ -1,0 +1,1 @@
+add_library(messagebox SHARED "main.cpp")
