@@ -1,0 +1,1 @@
+add_executable(bin2h "bin2h.cpp")

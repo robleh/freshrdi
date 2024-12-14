@@ -18,4 +18,5 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(assemblyline)
 
 add_subdirectory("src")
+add_subdirectory("tools")
 add_subdirectory("tests")
