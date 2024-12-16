@@ -19,7 +19,8 @@
         "CMAKE_VERBOSE_MAKEFILE": true,
         "CMAKE_MESSAGE_LOG_LEVEL": "DEBUG",
         "AL_EXAMPLES": "OFF",
-        "AL_INSTALL": "OFF"
+        "INSTALL_AL": "OFF",
+        "AL_TESTS": "ON"
       }
     },
     {
@@ -98,7 +99,7 @@
       "configuration": "Release",
       "inheritConfigureEnvironment": true,
       "targets": [
-        "start"
+        "freshrdi"
       ]
     },
     {
@@ -130,7 +131,7 @@
       "configuration": "Release",
       "inheritConfigureEnvironment": true,
       "targets": [
-        "start"
+        "freshrdi"
       ]
     },
     {

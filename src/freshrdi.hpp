@@ -1,9 +1,7 @@
-// shellcode.hpp is the shellcode's public interface. It should only contain
-// information about its exported functions for consumers.
 # pragma once
 #include "messagebox.hpp"
-#include <cstddef>
 #include <phnt.h>
+#include <cstddef>
 
 using export_t = decltype(&test);
 
@@ -84,4 +82,4 @@ data_dirs parse_data(headers* pe);
 headers parse_headers(void* base);
 
 extern "C" error entry();
-using shellcode_t = decltype(&entry);
+using freshrdi_t = decltype(&entry);
