@@ -330,13 +330,13 @@ extern "C" error entry() {
         return error::DLLMAIN;
     }
 
-    // We don't call DllMain because we are overloading early enough to let
-    // the OS handle it.
     auto functions = reinterpret_cast<unsigned long*>(va + data.exports->AddressOfFunctions);
-    auto rat_export = reinterpret_cast<decltype(&test)>(va + functions[0]);
-    if (!rat_export) {
+    auto test_export = reinterpret_cast<decltype(&test)>(va + functions[0]);
+    if (!test_export) {
         return error::DLLMAIN;
     }
+
+    test_export();
 
     return error::SUCCESS;
 }
